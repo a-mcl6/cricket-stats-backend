@@ -1,13 +1,13 @@
 from fastapi import APIRouter, HTTPException
-from sqlalchemy import Integer, func, select
-
-from app.db.models import BattingInnings, BowlingSpell, Player, Match
+from sqlalchemy import case, func, select
+from app.schemas.api import PlayerListItem, PlayerMatchResponse, PlayerStatsResponse
+from app.db.models import BattingInnings, BowlingSpell, Match, Player
 from app.db.session import SessionLocal
 
 router = APIRouter(prefix="/players", tags=["players"])
 
 
-@router.get("")
+@router.get("", response_model=list[PlayerListItem])
 def list_players() -> list[dict]:
     with SessionLocal() as db:
         players = db.scalars(select(Player).order_by(Player.name)).all()
@@ -19,27 +19,36 @@ def list_players() -> list[dict]:
         }
         for player in players
     ]
-    
-@router.get("/{player_id}/stats")
-def get_player_stats(player_id: int) -> dict:
+
+
+@router.get("/{player_id}/stats", response_model=PlayerStatsResponse)
+def get_player_stats(player_id: int, season: str | None = None) -> dict:
     with SessionLocal() as db:
         player = db.get(Player, player_id)
 
         if player is None:
             raise HTTPException(status_code=404, detail="Player not found")
 
-        batting = db.execute(
+        batting_query = (
             select(
                 func.count(BattingInnings.id),
                 func.sum(BattingInnings.runs),
                 func.sum(BattingInnings.balls),
                 func.sum(BattingInnings.fours),
                 func.sum(BattingInnings.sixes),
-                func.sum(func.cast(BattingInnings.not_out, Integer)),
-            ).where(BattingInnings.player_id == player_id)
-        ).one()
+                func.sum(case((BattingInnings.not_out == True, 1), else_=0)),
+                func.max(BattingInnings.runs),
+            )
+            .join(Match, BattingInnings.match_id == Match.id)
+            .where(BattingInnings.player_id == player_id)
+        )
 
-        bowling = db.execute(
+        if season:
+            batting_query = batting_query.where(Match.season == season)
+
+        batting = db.execute(batting_query).one()
+
+        bowling_query = (
             select(
                 func.sum(BowlingSpell.balls_bowled),
                 func.sum(BowlingSpell.runs),
@@ -47,8 +56,16 @@ def get_player_stats(player_id: int) -> dict:
                 func.sum(BowlingSpell.maidens),
                 func.sum(BowlingSpell.wides),
                 func.sum(BowlingSpell.no_balls),
-            ).where(BowlingSpell.player_id == player_id)
-        ).one()
+                func.max(BowlingSpell.wickets),
+            )
+            .join(Match, BowlingSpell.match_id == Match.id)
+            .where(BowlingSpell.player_id == player_id)
+        )
+
+        if season:
+            bowling_query = bowling_query.where(Match.season == season)
+
+        bowling = db.execute(bowling_query).one()
 
     innings = batting[0] or 0
     runs = batting[1] or 0
@@ -56,6 +73,7 @@ def get_player_stats(player_id: int) -> dict:
     fours = batting[3] or 0
     sixes = batting[4] or 0
     not_outs = batting[5] or 0
+    highest_score = batting[6]
     dismissals = innings - not_outs
 
     balls_bowled = bowling[0] or 0
@@ -64,6 +82,7 @@ def get_player_stats(player_id: int) -> dict:
     maidens = bowling[3] or 0
     wides = bowling[4] or 0
     no_balls = bowling[5] or 0
+    best_bowling = bowling[6]
 
     return {
         "player_id": player.id,
@@ -75,8 +94,11 @@ def get_player_stats(player_id: int) -> dict:
             "balls_faced": balls_faced,
             "fours": fours,
             "sixes": sixes,
+            "highest_score": highest_score,
             "average": round(runs / dismissals, 2) if dismissals else None,
-            "strike_rate": round((runs / balls_faced) * 100, 2) if balls_faced else None,
+            "strike_rate": round((runs / balls_faced) * 100, 2)
+            if balls_faced
+            else None,
         },
         "bowling": {
             "balls_bowled": balls_bowled,
@@ -84,34 +106,50 @@ def get_player_stats(player_id: int) -> dict:
             "maidens": maidens,
             "runs_conceded": runs_conceded,
             "wickets": wickets,
+            "best_bowling": best_bowling,
             "average": round(runs_conceded / wickets, 2) if wickets else None,
-            "economy": round((runs_conceded / balls_bowled) * 6, 2) if balls_bowled else None,
+            "economy": round((runs_conceded / balls_bowled) * 6, 2)
+            if balls_bowled
+            else None,
             "strike_rate": round(balls_bowled / wickets, 2) if wickets else None,
             "wides": wides,
             "no_balls": no_balls,
         },
     }
-    
-@router.get("/{player_id}/matches")
-def get_player_matches(player_id: int) -> list[dict]:
+
+
+@router.get("/{player_id}/matches", response_model=list[PlayerMatchResponse])
+def get_player_matches(player_id: int, season: str | None = None) -> list[dict]:
     with SessionLocal() as db:
         player = db.get(Player, player_id)
 
         if player is None:
             raise HTTPException(status_code=404, detail="Player not found")
 
-        batting_rows = db.execute(
+        batting_query = (
             select(BattingInnings, Match)
             .join(Match, BattingInnings.match_id == Match.id)
             .where(BattingInnings.player_id == player_id)
-            .order_by(Match.id.desc())
+        )
+
+        if season:
+            batting_query = batting_query.where(Match.season == season)
+
+        batting_rows = db.execute(
+            batting_query.order_by(Match.id.desc())
         ).all()
 
-        bowling_rows = db.execute(
+        bowling_query = (
             select(BowlingSpell, Match)
             .join(Match, BowlingSpell.match_id == Match.id)
             .where(BowlingSpell.player_id == player_id)
-            .order_by(Match.id.desc())
+        )
+
+        if season:
+            bowling_query = bowling_query.where(Match.season == season)
+
+        bowling_rows = db.execute(
+            bowling_query.order_by(Match.id.desc())
         ).all()
 
     matches: dict[int, dict] = {}

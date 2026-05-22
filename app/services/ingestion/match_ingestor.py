@@ -1,3 +1,5 @@
+from datetime import date
+
 from sqlalchemy.orm import Session
 
 from app.db.models import BattingInnings, BowlingSpell, Match
@@ -29,6 +31,7 @@ def ingest_scorecard(db: Session, scorecard: Scorecard, nvplay_match_id: str) ->
         team_1_score=scorecard.match.team_1_score,
         team_2_score=scorecard.match.team_2_score,
         result=scorecard.match.result,
+        season=scorecard.match.date.split()[-1],
     )
 
     db.add(match)

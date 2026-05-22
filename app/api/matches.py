@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException
 from sqlalchemy import select
-
+from app.schemas.api import MatchListItem, MatchScorecardResponse
 from app.db.models import Match
 from app.db.session import SessionLocal
 
@@ -10,7 +10,7 @@ from app.db.repositories import get_match_with_scorecard
 router = APIRouter(prefix="/matches", tags=["matches"])
 
 
-@router.get("")
+@router.get("", response_model=list[MatchListItem])
 def list_matches() -> list[dict]:
     with SessionLocal() as db:
         matches = db.scalars(select(Match).order_by(Match.id.desc())).all()
@@ -29,7 +29,7 @@ def list_matches() -> list[dict]:
         for match in matches
     ]
     
-@router.get("/{match_id}")
+@router.get("/{match_id}", response_model=MatchScorecardResponse)
 def get_match(match_id: int) -> dict:
     with SessionLocal() as db:
         match = get_match_with_scorecard(db, match_id)

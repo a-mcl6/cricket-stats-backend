@@ -41,6 +41,7 @@ class Match(Base):
     result: Mapped[str | None] = mapped_column(String)
     batting_innings: Mapped[list["BattingInnings"]] = relationship()
     bowling_spells: Mapped[list["BowlingSpell"]] = relationship()
+    season: Mapped[str] = mapped_column(String, index=True)
 
 
 class BattingInnings(Base):
