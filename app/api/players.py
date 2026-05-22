@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException
 from sqlalchemy import Integer, func, select
 
-from app.db.models import BattingInnings, BowlingSpell, Player
+from app.db.models import BattingInnings, BowlingSpell, Player, Match
 from app.db.session import SessionLocal
 
 router = APIRouter(prefix="/players", tags=["players"])
@@ -91,3 +91,78 @@ def get_player_stats(player_id: int) -> dict:
             "no_balls": no_balls,
         },
     }
+    
+@router.get("/{player_id}/matches")
+def get_player_matches(player_id: int) -> list[dict]:
+    with SessionLocal() as db:
+        player = db.get(Player, player_id)
+
+        if player is None:
+            raise HTTPException(status_code=404, detail="Player not found")
+
+        batting_rows = db.execute(
+            select(BattingInnings, Match)
+            .join(Match, BattingInnings.match_id == Match.id)
+            .where(BattingInnings.player_id == player_id)
+            .order_by(Match.id.desc())
+        ).all()
+
+        bowling_rows = db.execute(
+            select(BowlingSpell, Match)
+            .join(Match, BowlingSpell.match_id == Match.id)
+            .where(BowlingSpell.player_id == player_id)
+            .order_by(Match.id.desc())
+        ).all()
+
+    matches: dict[int, dict] = {}
+
+    for batting, match in batting_rows:
+        matches.setdefault(
+            match.id,
+            {
+                "match_id": match.id,
+                "date": match.date,
+                "competition": match.competition,
+                "venue": match.venue,
+                "result": match.result,
+                "batting": None,
+                "bowling": None,
+            },
+        )
+
+        matches[match.id]["batting"] = {
+            "innings_number": batting.innings_number,
+            "position": batting.batting_position,
+            "runs": batting.runs,
+            "balls": batting.balls,
+            "fours": batting.fours,
+            "sixes": batting.sixes,
+            "dismissal": batting.dismissal,
+            "not_out": batting.not_out,
+        }
+
+    for bowling, match in bowling_rows:
+        matches.setdefault(
+            match.id,
+            {
+                "match_id": match.id,
+                "date": match.date,
+                "competition": match.competition,
+                "venue": match.venue,
+                "result": match.result,
+                "batting": None,
+                "bowling": None,
+            },
+        )
+
+        matches[match.id]["bowling"] = {
+            "innings_number": bowling.innings_number,
+            "overs": bowling.overs,
+            "balls_bowled": bowling.balls_bowled,
+            "maidens": bowling.maidens,
+            "runs": bowling.runs,
+            "wickets": bowling.wickets,
+            "economy": bowling.economy,
+        }
+
+    return list(matches.values())
