@@ -38,6 +38,12 @@ def ingest_scorecard(db: Session, scorecard: Scorecard, nvplay_match_id: str) ->
     db.flush()
 
     for innings in scorecard.innings:
+        if innings.innings_number == 1:
+            batting_team = team_1
+            bowling_team = team_2
+        else:
+            batting_team = team_2
+            bowling_team = team_1
         for position, batter in enumerate(innings.batting, start=1):
             player = get_or_create_player(db, batter.player_name)
 
@@ -55,6 +61,7 @@ def ingest_scorecard(db: Session, scorecard: Scorecard, nvplay_match_id: str) ->
                 not_out=batter.not_out,
                 is_captain=batter.is_captain,
                 is_wicket_keeper=batter.is_wicket_keeper,
+                team_id=batting_team.id,
             )
 
             db.add(batting)
@@ -74,6 +81,7 @@ def ingest_scorecard(db: Session, scorecard: Scorecard, nvplay_match_id: str) ->
                 economy=bowler.economy,
                 wides=bowler.wides,
                 no_balls=bowler.no_balls,
+                team_id=bowling_team.id,
             )
 
             db.add(spell)

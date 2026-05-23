@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 
-from app.api import matches, players
+from app.api import leaderboards, matches, players, teams
 from app.core.config import settings
 
 app = FastAPI(
@@ -11,6 +11,8 @@ app = FastAPI(
 
 app.include_router(matches.router)
 app.include_router(players.router)
+app.include_router(leaderboards.router)
+app.include_router(teams.router)
 
 
 @app.get("/health")

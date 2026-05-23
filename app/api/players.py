@@ -22,13 +22,17 @@ def list_players() -> list[dict]:
 
 
 @router.get("/{player_id}/stats", response_model=PlayerStatsResponse)
-def get_player_stats(player_id: int, season: str | None = None) -> dict:
+def get_player_stats(
+    player_id: int,
+    season: str | None = None,
+    team_id: int | None = None,
+) -> dict:
     with SessionLocal() as db:
         player = db.get(Player, player_id)
 
         if player is None:
             raise HTTPException(status_code=404, detail="Player not found")
-
+    
         batting_query = (
             select(
                 func.count(BattingInnings.id),
@@ -45,6 +49,9 @@ def get_player_stats(player_id: int, season: str | None = None) -> dict:
 
         if season:
             batting_query = batting_query.where(Match.season == season)
+            
+        if team_id:
+            batting_query = batting_query.where(BattingInnings.team_id == team_id)
 
         batting = db.execute(batting_query).one()
 
@@ -56,7 +63,6 @@ def get_player_stats(player_id: int, season: str | None = None) -> dict:
                 func.sum(BowlingSpell.maidens),
                 func.sum(BowlingSpell.wides),
                 func.sum(BowlingSpell.no_balls),
-                func.max(BowlingSpell.wickets),
             )
             .join(Match, BowlingSpell.match_id == Match.id)
             .where(BowlingSpell.player_id == player_id)
@@ -64,6 +70,29 @@ def get_player_stats(player_id: int, season: str | None = None) -> dict:
 
         if season:
             bowling_query = bowling_query.where(Match.season == season)
+        
+        if team_id:
+            bowling_query = bowling_query.where(BowlingSpell.team_id == team_id)
+        
+        
+        best_bowling_query = (
+            select(BowlingSpell)
+            .join(Match, BowlingSpell.match_id == Match.id)
+            .where(BowlingSpell.player_id == player_id)
+        )
+
+        if season:
+            best_bowling_query = best_bowling_query.where(Match.season == season)
+
+        if team_id:
+            best_bowling_query = best_bowling_query.where(BowlingSpell.team_id == team_id)
+
+        best_bowling_row = db.scalars(
+            best_bowling_query.order_by(
+                BowlingSpell.wickets.desc(),
+                BowlingSpell.runs.asc(),
+            )
+        ).first()
 
         bowling = db.execute(bowling_query).one()
 
@@ -82,7 +111,15 @@ def get_player_stats(player_id: int, season: str | None = None) -> dict:
     maidens = bowling[3] or 0
     wides = bowling[4] or 0
     no_balls = bowling[5] or 0
-    best_bowling = bowling[6]
+    best_bowling = (
+        {
+            "wickets": best_bowling_row.wickets,
+            "runs": best_bowling_row.runs,
+            "figures": f"{best_bowling_row.wickets}/{best_bowling_row.runs}",
+        }
+        if best_bowling_row
+        else None
+    )
 
     return {
         "player_id": player.id,
@@ -119,7 +156,11 @@ def get_player_stats(player_id: int, season: str | None = None) -> dict:
 
 
 @router.get("/{player_id}/matches", response_model=list[PlayerMatchResponse])
-def get_player_matches(player_id: int, season: str | None = None) -> list[dict]:
+def get_player_matches(
+    player_id: int,
+    season: str | None = None,
+    team_id: int | None = None,
+) -> list[dict]:
     with SessionLocal() as db:
         player = db.get(Player, player_id)
 
@@ -134,6 +175,9 @@ def get_player_matches(player_id: int, season: str | None = None) -> list[dict]:
 
         if season:
             batting_query = batting_query.where(Match.season == season)
+            
+        if team_id:
+            batting_query = batting_query.where(BattingInnings.team_id == team_id)
 
         batting_rows = db.execute(
             batting_query.order_by(Match.id.desc())
@@ -147,6 +191,9 @@ def get_player_matches(player_id: int, season: str | None = None) -> list[dict]:
 
         if season:
             bowling_query = bowling_query.where(Match.season == season)
+            
+        if team_id:
+            bowling_query = bowling_query.where(BowlingSpell.team_id == team_id)
 
         bowling_rows = db.execute(
             bowling_query.order_by(Match.id.desc())
@@ -177,6 +224,7 @@ def get_player_matches(player_id: int, season: str | None = None) -> list[dict]:
             "sixes": batting.sixes,
             "dismissal": batting.dismissal,
             "not_out": batting.not_out,
+            "team_id": batting.team_id,
         }
 
     for bowling, match in bowling_rows:
@@ -201,6 +249,7 @@ def get_player_matches(player_id: int, season: str | None = None) -> list[dict]:
             "runs": bowling.runs,
             "wickets": bowling.wickets,
             "economy": bowling.economy,
+            "team_id": bowling.team_id,
         }
 
     return list(matches.values())

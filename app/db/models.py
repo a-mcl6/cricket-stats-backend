@@ -51,6 +51,7 @@ class BattingInnings(Base):
     match_id: Mapped[int] = mapped_column(ForeignKey("matches.id"), index=True)
     innings_number: Mapped[int] = mapped_column(Integer)
     player_id: Mapped[int] = mapped_column(ForeignKey("players.id"), index=True)
+    team_id: Mapped[int] = mapped_column(ForeignKey("teams.id"), index=True)
 
     batting_position: Mapped[int | None] = mapped_column(Integer)
     dismissal: Mapped[str] = mapped_column(String)
@@ -63,6 +64,7 @@ class BattingInnings(Base):
     is_captain: Mapped[bool] = mapped_column(Boolean)
     is_wicket_keeper: Mapped[bool] = mapped_column(Boolean)
     player: Mapped["Player"] = relationship()
+    team: Mapped["Team"] = relationship()
 
 
 class BowlingSpell(Base):
@@ -72,6 +74,7 @@ class BowlingSpell(Base):
     match_id: Mapped[int] = mapped_column(ForeignKey("matches.id"), index=True)
     innings_number: Mapped[int] = mapped_column(Integer)
     player_id: Mapped[int] = mapped_column(ForeignKey("players.id"), index=True)
+    team_id: Mapped[int] = mapped_column(ForeignKey("teams.id"), index=True)
 
     overs: Mapped[str] = mapped_column(String)
     balls_bowled: Mapped[int] = mapped_column(Integer)
@@ -82,3 +85,4 @@ class BowlingSpell(Base):
     wides: Mapped[int] = mapped_column(Integer)
     no_balls: Mapped[int] = mapped_column(Integer)
     player: Mapped["Player"] = relationship()
+    team: Mapped["Team"] = relationship()

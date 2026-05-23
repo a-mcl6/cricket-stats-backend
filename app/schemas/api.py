@@ -17,6 +17,11 @@ class BattingStats(BaseModel):
     average: float | None
     strike_rate: float | None
 
+    
+class BestBowling(BaseModel):
+    wickets: int
+    runs: int
+    figures: str
 
 class BowlingStats(BaseModel):
     balls_bowled: int
@@ -24,7 +29,7 @@ class BowlingStats(BaseModel):
     maidens: int
     runs_conceded: int
     wickets: int
-    best_bowling: int | None
+    best_bowling: BestBowling | None
     average: float | None
     economy: float | None
     strike_rate: float | None
@@ -41,6 +46,7 @@ class PlayerStatsResponse(BaseModel):
 
 class PlayerMatchBatting(BaseModel):
     innings_number: int
+    team_id: int
     position: int | None
     runs: int
     balls: int
@@ -51,6 +57,7 @@ class PlayerMatchBatting(BaseModel):
 
 
 class PlayerMatchBowling(BaseModel):
+    team_id: int
     innings_number: int
     overs: str
     balls_bowled: int
@@ -113,3 +120,42 @@ class MatchScorecardResponse(BaseModel):
     venue: str | None
     result: str | None
     innings: list[MatchInningsResponse]
+
+
+class BattingLeaderboardEntry(BaseModel):
+    player_id: int
+    player_name: str
+    innings: int
+    not_outs: int
+    runs: int
+    balls_faced: int
+    fours: int
+    sixes: int
+    highest_score: int | None
+    average: float | None
+    strike_rate: float | None
+
+
+class BowlingLeaderboardEntry(BaseModel):
+    player_id: int
+    player_name: str
+    balls_bowled: int
+    overs: str
+    maidens: int
+    runs_conceded: int
+    wickets: int
+    best_bowling: BestBowling | None
+    average: float | None
+    economy: float | None
+    strike_rate: float | None
+    wides: int
+    no_balls: int
+    
+class TeamListItem(BaseModel):
+    id: int
+    name: str
+
+
+class TeamPlayerItem(BaseModel):
+    id: int
+    name: str
