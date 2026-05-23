@@ -11,9 +11,16 @@ router = APIRouter(prefix="/matches", tags=["matches"])
 
 
 @router.get("", response_model=list[MatchListItem])
-def list_matches() -> list[dict]:
+def list_matches(season: str | None = None) -> list[dict]:
     with SessionLocal() as db:
-        matches = db.scalars(select(Match).order_by(Match.id.desc())).all()
+        query = select(Match)
+
+        if season:
+            query = query.where(Match.season == season)
+
+        matches = db.scalars(
+            query.order_by(Match.id.desc())
+        ).all()
 
     return [
         {
